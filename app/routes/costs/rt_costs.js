@@ -26,9 +26,7 @@ function CheckUpdateControllerInfo(ct_counter, request, controller_name) {
       ct_counter.set(controller_name, ct_info);
     }
 
-    console.log(
-      `${current_time} - Controller: ${controller_name} - Count: ${ct_info.count}`,
-    );
+    console.log(`${current_time} - Controller: ${controller_name} - Count: ${ct_info.count}`);
   } catch (error) {
     console.log("[TRY-CATCH ERROR] routes::rt_dino error: ", error);
   }
@@ -46,10 +44,18 @@ module.exports = function (app) {
   });
 
   //+-----------------------------------------------------------+
-  //| POST /costs/list                                          |
+  //| GET /costs/list                                           |
   //+-----------------------------------------------------------+
   app.get(`/${api_path}/costs/list`, (request, response) => {
     CheckUpdateControllerInfo(ct_counter, request, "listCosts");
     app.controllers.costs.ct_costs.listCosts(app, request, response);
+  });
+
+  //+-----------------------------------------------------------+
+  //| POST /costs/delete                                        |
+  //+-----------------------------------------------------------+
+  app.post(`/${api_path}/costs/delete`, (request, response) => {
+    CheckUpdateControllerInfo(ct_counter, request, "listCosts");
+    app.controllers.costs.ct_costs.deleteCost(app, request, response);
   });
 };
