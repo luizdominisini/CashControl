@@ -61,6 +61,7 @@ module.exports.listCosts = async function (app, request, response) {
       cost_reference_month: Joi.string()
         .pattern(/^\d{4}-(0[1-9]|1[0-2])$/)
         .required(),
+      cost_type: Joi.string().valid("FIXED", "VARIABLE").optional(),
     });
 
     const result = schema.validate(request.query);
@@ -70,9 +71,14 @@ module.exports.listCosts = async function (app, request, response) {
       return response.status(400).json(res);
     }
 
-    const { cost_reference_month } = result.value;
+    const { cost_reference_month, cost_type } = result.value;
 
-    const costs_result = await ListCostsByReferenceMonth(app, cost_reference_month);
+    let costs_result;
+    if (cost_type === "FIXED" || cost_type === "VARIABLE") {
+      costs_result = await ListCostsByReferenceMonthAndType(app, cost_reference_month, cost_type);
+    } else {
+      costs_result = await ListCostsByReferenceMonth(app, cost_reference_month);
+    }
 
     res.status = "success";
     res.costs = costs_result;
@@ -131,6 +137,94 @@ module.exports.deleteCost = async function (app, request, response) {
     return response.status(200).json(res);
   } catch (error) {
     console.log("[TRY-CATCH ERROR] controllers::ct_costs deleteCost error: ", error);
+    res.status = "error";
+    res.message = error.message;
+    return response.status(400).json(res);
+  }
+};
+
+//+----------------------------------------------------------------+
+//| updateCost                                                     |
+//+----------------------------------------------------------------+
+module.exports.updateCost = async function (app, request, response) {
+  let res = {};
+  try {
+    const schema = Joi.object({
+      cost_id:          Joi.number().integer().min(1).max(MAX_UINT_32).required(),
+      cost_value:       Joi.number().min(MIN_DECIMAL).max(MAX_DECIMAL).required(),
+      cost_type:        Joi.string().valid("FIXED", "VARIABLE").required(),
+      cost_paid:        Joi.string().valid("TRUE", "FALSE").required(),
+      cost_category:    Joi.string().max(50).required(),
+      cost_description: Joi.string().max(50).required(),
+    });
+
+    const result = schema.validate(request.body);
+    if (result.error) {
+      res.status = "error";
+      res.message = result.error.details[0].message;
+      return response.status(400).json(res);
+    }
+
+    const { cost_id, cost_value, cost_type, cost_paid, cost_category, cost_description } = result.value;
+
+    const cost_result = await GetCostById(app, cost_id);
+    if (!cost_result) {
+      res.status = "error";
+      res.message = "Custo não encontrado.";
+      return response.status(400).json(res);
+    }
+
+    if (cost_result.cost_status === "DELETED") {
+      res.status = "error";
+      res.message = "Custo já foi deletado.";
+      return response.status(400).json(res);
+    }
+
+    const update_result = await UpdateCostById(app, cost_id, cost_value, cost_type, cost_paid, cost_category, cost_description);
+    if (!update_result) {
+      res.status = "error";
+      res.message = "Erro ao atualizar custo.";
+      return response.status(400).json(res);
+    }
+
+    res.status = "success";
+    res.message = "Custo atualizado com sucesso.";
+    return response.status(200).json(res);
+  } catch (error) {
+    console.log("[TRY-CATCH ERROR] controllers::ct_costs updateCost error: ", error);
+    res.status = "error";
+    res.message = error.message;
+    return response.status(400).json(res);
+  }
+};
+
+//+----------------------------------------------------------------+
+//| getSummary                                                     |
+//+----------------------------------------------------------------+
+module.exports.getSummary = async function (app, request, response) {
+  let res = {};
+  try {
+    const schema = Joi.object({
+      cost_reference_month: Joi.string()
+        .pattern(/^\d{4}-(0[1-9]|1[0-2])$/)
+        .required(),
+    });
+
+    const result = schema.validate(request.query);
+    if (result.error) {
+      res.status = "error";
+      res.message = result.error.details[0].message;
+      return response.status(400).json(res);
+    }
+
+    const { cost_reference_month } = result.value;
+    const summary = await GetSummaryByReferenceMonth(app, cost_reference_month);
+
+    res.status = "success";
+    res.summary = summary;
+    return response.status(200).json(res);
+  } catch (error) {
+    console.log("[TRY-CATCH ERROR] controllers::ct_costs getSummary error: ", error);
     res.status = "error";
     res.message = error.message;
     return response.status(400).json(res);
@@ -228,6 +322,73 @@ function DeleteCostById(app, cost_id) {
             } else {
               resolve(null);
             }
+          } else {
+            reject(error);
+          }
+        });
+      } else {
+        reject(error);
+      }
+    });
+  });
+}
+
+//
+function UpdateCostById(app, cost_id, cost_value, cost_type, cost_paid, cost_category, cost_description) {
+  return new Promise((resolve, reject) => {
+    app.config.mysql((error, connection) => {
+      if (!error) {
+        const costs_dao = new app.models.mysql.costs_dao(connection);
+        costs_dao.UpdateCostById(cost_id, cost_value, cost_type, cost_paid, cost_category, cost_description, (error, result) => {
+          connection.release();
+          if (!error) {
+            if (result.affectedRows > 0) {
+              resolve(result);
+            } else {
+              resolve(null);
+            }
+          } else {
+            reject(error);
+          }
+        });
+      } else {
+        reject(error);
+      }
+    });
+  });
+}
+
+//
+function ListCostsByReferenceMonthAndType(app, cost_reference_month, cost_type) {
+  return new Promise((resolve, reject) => {
+    app.config.mysql((error, connection) => {
+      if (!error) {
+        const costs_dao = new app.models.mysql.costs_dao(connection);
+        costs_dao.ListCostsByReferenceMonthAndType(cost_reference_month, cost_type, (error, result) => {
+          connection.release();
+          if (!error) {
+            resolve(result.length > 0 ? result : []);
+          } else {
+            reject(error);
+          }
+        });
+      } else {
+        reject(error);
+      }
+    });
+  });
+}
+
+//
+function GetSummaryByReferenceMonth(app, cost_reference_month) {
+  return new Promise((resolve, reject) => {
+    app.config.mysql((error, connection) => {
+      if (!error) {
+        const costs_dao = new app.models.mysql.costs_dao(connection);
+        costs_dao.GetSummaryByReferenceMonth(cost_reference_month, (error, result) => {
+          connection.release();
+          if (!error) {
+            resolve(result[0]);
           } else {
             reject(error);
           }

@@ -55,7 +55,23 @@ module.exports = function (app) {
   //| POST /costs/delete                                        |
   //+-----------------------------------------------------------+
   app.post(`/${api_path}/costs/delete`, (request, response) => {
-    CheckUpdateControllerInfo(ct_counter, request, "listCosts");
+    CheckUpdateControllerInfo(ct_counter, request, "deleteCost");
     app.controllers.costs.ct_costs.deleteCost(app, request, response);
+  });
+
+  //+-----------------------------------------------------------+
+  //| POST /costs/update                                        |
+  //+-----------------------------------------------------------+
+  app.post(`/${api_path}/costs/update`, (request, response) => {
+    CheckUpdateControllerInfo(ct_counter, request, "updateCost");
+    app.controllers.costs.ct_costs.updateCost(app, request, response);
+  });
+
+  //+-----------------------------------------------------------+
+  //| GET /costs/summary                                        |
+  //+-----------------------------------------------------------+
+  app.get(`/${api_path}/costs/summary`, (request, response) => {
+    CheckUpdateControllerInfo(ct_counter, request, "getSummary");
+    app.controllers.costs.ct_costs.getSummary(app, request, response);
   });
 };

@@ -1,5 +1,6 @@
 const express = require("express");
 const consign = require("consign");
+const cors = require("cors");
 
 const app = express();
 
@@ -40,6 +41,7 @@ const config_files = ["mariadb-configs.json"];
 
   // set global
   app.set("configs", gl_configs);
+  app.use(cors());
   app.use(express.json());
 
   // autoload routes, controllers, models, configs
